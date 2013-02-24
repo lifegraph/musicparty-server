@@ -4,10 +4,12 @@
  */
 
 var express = require('express')
+  , app = express()
   , routes = require('./routes')
   , user = require('./routes/user')
   , http = require('http')
   , https = require('https')
+  , server = http.createServer(app) 
   , path = require('path')
   , StreamingSession = require('./models/StreamingSession')
   , mongoose = require('mongoose')
@@ -15,7 +17,9 @@ var express = require('express')
   , spawn = require('child_process').spawn
   , lifegraph = require("lifegraph")
   , rem = require('rem')
-  , async = require('async');
+  , async = require('async')
+  , _ = require('underscore')
+  , io = require('socket.io').listen(server);
 
   // App key and secret (these are git ignored)
   var key = process.env.FBKEY || require('./config.json').fbapp_key;
@@ -25,8 +29,6 @@ var express = require('express')
 /**
  * Configure application
  */
-
-var app = express();
 var hostUrl = 'http://entrance-tutorial.herokuapp.com';
 var db;
 
@@ -40,7 +42,7 @@ app.configure(function(){
   app.use(express.bodyParser());
   app.use(express.cookieParser());
   app.use(express.cookieSession({
-    secret: 'entranceapp'
+    secret: 'entrance-tutorial'
   }));
   app.use(express.methodOverride());
   app.use(app.router);
@@ -127,7 +129,6 @@ app.post('/:deviceId/listen', function (req, res) {
 });
 
 app.get('/:deviceId/party/json', function (req, res) {
-  console.log("request for /party");
   getCurrentStreamingSession(req.params.deviceId, function (error, currentStreamingSession) {
     if (currentStreamingSession && currentStreamingSession.tracks) {
       res.json(currentStreamingSession.tracks);      
@@ -137,7 +138,19 @@ app.get('/:deviceId/party/json', function (req, res) {
   });
 });
 
+app.get("/test/:pID", function (req, res) {
+  handleTap("0x6A 0xE6 0x44 0xE9", req.params.pID, function(err, user) {
+
+  });
+});
+
 app.get('/:deviceId/party/', function (req, res) {
+
+
+  getCurrentStreamingSession(req.params.deviceId, function (err, streamingSession) {
+    var socket = io.of('/' + req.params.deviceId);
+    streamingSession.openSockets.push(socket);
+  })
   res.render('party', {title: 'Party'});
 });
 
@@ -172,16 +185,25 @@ function handleTap (deviceId, pid, hollaback) {
               console.log("No users remaining in room!");
 
               // Let the client know to stop playing
-
               setTracksToStreamingSession(deviceId, [], function(err, streamingSession) {
-                
+
+                sendMessageToSessionSockets(streamingSession.openSockets, {}});
+
+                return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Empty session. Stopping Streaming After Song Ends.', 'cmd' : 0});
               });
 
-              return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Empty session. Stopping Streaming After Song Ends.', 'cmd' : 0});
+              
 
             } else {
-              // User left room, but people are still in room
-              return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
+
+              updateTracksForStreamingSession(newStreamingSession.streamingUsers, function (err, tracks) {
+
+                sendMessageToSessionSockets(streamingSession.openSockets, tracks);
+
+                // User left room, but people are still in room
+                return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
+              });
+              
             }
           });
         } 
@@ -191,30 +213,24 @@ function handleTap (deviceId, pid, hollaback) {
           // Add the user to the array
           console.log("Adding user to array.");
 
-          addUserToStreamingUsers(deviceId, user, function() {
-            // console.log("num users in currentStreamingSession:" + currentStreamingSession.users.length);
-            // if (currentStreamingSession.users.length > 0) {
-              console.log("STOPPING THE PLAYER.")
-            // }
+          addUserToStreamingUsers(deviceId, user, function (err, streamingSession) {
 
-            getFacebookFavoriteArtists(user, function (artists) {
+            updateTracksForStreamingSession(streamingSession, function (err, tracks) {
+              if (err) {
+                console.log("Error updating tracks: " + err.message);
 
-              getTracksFromArtists(artists, function (tracks) {
+                return hollaback({'error': err.message});
+              }
+              else {
 
-                setTracksToStreamingSession(deviceId, tracks, function (err, streamingSession) {
-
-                  console.log("Added", streamingSession.tracks.length, "tracks to", deviceId, "room");
-
-                  if (err) {
-
-                    console.log(err.message);
-
-                    return hollaback({'error': err.message});
-                  }
-                    return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser', 'cmd' : '1'});
-                });
-              });
-            });  
+                if (tracks.length) {
+                  return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser', 'cmd' : '1'});
+                }
+                else {
+                  return hollaback({'error': 'User Added To Streaming Session but they have  no tracks!'});
+                }
+              }
+            })
           });
         }
       });
@@ -222,13 +238,36 @@ function handleTap (deviceId, pid, hollaback) {
   });
 }
 
+function updateTracksForStreamingSession(streamingSession, hollaback) {
+
+  zipFavoriteArtists(streamingSession.streamingUsers, function (err, artists) {
+    if (err) return hollaback(err);
+
+    getTracksFromArtists(artists, function (err, tracks) {
+
+      // if (err) return hollaback({'error': err.message});
+      if (err) return hollaback(err, null);
+
+      setTracksToStreamingSession(streamingSession.deviceId, tracks, function (err, streamingSession) {
+
+        console.log("Added", streamingSession.tracks.length, "tracks to", deviceId, "room.");
+
+        if (err) {
+
+          return hollaback(err, null);
+        }
+          // return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser', 'cmd' : '1'});
+          return hollaback(null, tracks);
+      });
+    });
+  });  
+}
+
 /*
  * Poll Facebook to find the favorite artists
  * of a user, then call a callback with the list of artists' names
  */
 function getFacebookFavoriteArtists (facebookUser, callback) {
-
-  // console.log("ACCESS TOKEN: " + facebookUser.access_token);
 
   // Use the Facebook API to get all the music likes of a user
   var options = {
@@ -239,21 +278,46 @@ function getFacebookFavoriteArtists (facebookUser, callback) {
   https.get(options, function(fbres) {
       var output = '';
       fbres.on('data', function (chunk) {
-          //console.log("CHUNK:" + chunk);
           output += chunk;
       });
 
       fbres.on('end', function() {
-        // console.log("favtracks output for %s:", facebookUser.name);
-        // console.log(output);
         var data = JSON.parse(output).data;
-        callback(data.map(function (artist) { return artist.name;}));
+        callback(null, data.map(function (artist) { return artist.name;}));
       });
+
+      fbres.on('error', function (err) {
+        callback(err, null);
+      })
   });
 }
-/**
- * Gets the songs associated with each artist in the array artists.
+
+/*
+ * Finds the artists that all the streaming users like
  */
+ function zipFavoriteArtists(streamingUsers, callback) {
+
+  var zippedArtists;
+
+  // For each streaming user, find their favorite artists 
+  async.map(streamingUsers, getFacebookFavoriteArtists, function(err, artists) {
+    if (err) {
+      console.log("Error retrieving artist intersection: " + err);
+    }
+    else {
+      zippedArtists = _.flatten(_.zip.apply(_, artists));
+    }
+    callback(err, zippedArtists);
+  });
+ }
+
+ function sendMessageToSessionSockets(openSockets, message) {
+  if !(openSockets) return;
+
+  for (var i = 0; i < openSockets.length; i++) {
+    openSockets[i].emit('tracks', message);
+  }
+ }
 
 function getDistinctArray (arr, dohash) {
   var dups = {};
@@ -265,6 +329,12 @@ function getDistinctArray (arr, dohash) {
   });
 }
 
+function debugObject(prefix, obj) {
+  console.log(prefix + " : " + JSON.stringify(obj, 2, undefined));
+}
+/*
+ * Gets the songs associated with each artist in the array artists.
+ */
 function getTracksFromArtists (artists, callback) {
   if (!artists.length) {
     console.log("There are no artists.");
@@ -290,16 +360,18 @@ function getTracksFromArtists (artists, callback) {
       }));
     });
   }, function (err, tracks) {
-    tracks = Array.prototype.concat.apply([], tracks);
-    shuffle(tracks);
-    tracks.sort(function (a, b) {
-      var popa = ((a.popularity*10)|0), popb = ((b.popularity*10)|0);
-      return popa > popb ? -1 : popa < popb ? 1 : 0;
-    });
-    tracks = getDistinctArray(tracks, function (el) {
-      return String(el.artist) + ' ::: ' + String(el.track);
-    });
-    callback(tracks);
+    if (!err) {
+      tracks = Array.prototype.concat.apply([], tracks);
+      shuffle(tracks);
+      tracks.sort(function (a, b) {
+        var popa = ((a.popularity*10)|0), popb = ((b.popularity*10)|0);
+        return popa > popb ? -1 : popa < popb ? 1 : 0;
+      });
+      tracks = getDistinctArray(tracks, function (el) {
+        return String(el.artist) + ' ::: ' + String(el.track);
+      });
+    }
+    callback(err, tracks);
   });
 }
 
@@ -370,13 +442,11 @@ function addUserToStreamingUsers(deviceId, user, callback) {
   });
 }
 
-function setTracksToStreamingSession(deviceId, tracks, callback) {
-  getCurrentStreamingSession(deviceId, function (err, streamingSession) {
-    streamingSession.tracks = tracks;
-    setCurrentStreamingSession(deviceId, streamingSession, function (err) {
-      if (err) console.log("Error saving tracks!");
-      return callback(err, streamingSession);
-    });
+function setTracksToStreamingSession(streamingSession, tracks, callback) {
+  streamingSession.tracks = tracks;
+  setCurrentStreamingSession(streamingSession.deviceId, streamingSession, function (err) {
+    if (err) console.log("Error saving tracks!");
+    return callback(err, streamingSession);
   });
 }
 
@@ -420,10 +490,30 @@ function indexOfStreamingUser (deviceId, userInQuestion, callback) {
   });
 }
 
+/*
+* Create new socket connections
+* and handle teardowns
+*/
+io.sockets.on('connection', function (socket) {
+
+  // If there is a socket
+  // if (socket) {
+
+    // Set our global socket to it for later
+    console.log("Socket: " + socket);
+  // }
+
+  // When a socket disconnects
+  socket.on('disconnect', function () {
+
+    // Remove that socket from our array
+    
+  });
+});
+
 /**
  * Connect
  */
-
 // Start database and get things running
 console.log("connecting to database at " + app.get('dburl'));
 
@@ -435,7 +525,7 @@ db.once('open', function () {
 
   console.log("Connected to mongo.");
   // Start server.
-  http.createServer(app).listen(app.get('port'), function(){
+  server.listen(app.get('port'), function(){
     console.log("Express server listening on port " + app.get('port'));
   });
 })

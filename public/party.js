@@ -1,3 +1,6 @@
+
+var browser_socket = io.connect(window.location);
+
 function playSong (artist, title, uri, next) {
   var state = {
     playable: false
@@ -45,7 +48,7 @@ function playSong (artist, title, uri, next) {
       console.log('Track timed out, skipping.');
       next();
     }
-  }, 10000);
+  }, 4000);
 
   return state;
 }
@@ -73,3 +76,12 @@ $(function () {
     $('#next').on('click', nextTrack);
   })
 })
+
+// When we get a new image message
+browser_socket.on('socket', function (data) {
+  
+  // Change the source attribute of the image in 
+  // our client html to the new image url
+    console.log(data);
+
+});

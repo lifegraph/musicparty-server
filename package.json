@@ -11,7 +11,11 @@
     "request": "~2.12.0",
     "rem": "~0.6.3",
     "async": "~0.2.5",
-    "lifegraph": "~0.0.1"
+    "lifegraph": "~0.0.1",
+    "socket.io":"latest",
+    "underscore":"latest",
+    "async":"latest",
+    
   },
   "engines": {
     "node": "0.8.x",
