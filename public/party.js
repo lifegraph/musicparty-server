@@ -1,9 +1,14 @@
+console.log("URL:", extractDeviceIdFromURL());
 var browser_socket = io.connect(extractDeviceIdFromURL());
 var currentTrack;
 var nextTrackTimeout;
 
 browser_socket.on('connect', function (data) {
   console.log("We've got a connection, captain!: " + extractDeviceIdFromURL());
+
+  $.get(extractDeviceIdFromURL() + '/party/json', function (tracks) {
+    setUpPlaylist(tracks);
+  });
 });
 
 browser_socket.on('tracks', function (data) {
@@ -72,12 +77,6 @@ function playSong (artist, title, uri, next) {
 
   return state;
 }
-
-$(function () {
-  $.get(extractDeviceIdFromURL() + '/party/json', function (tracks) {
-    setUpPlaylist(tracks);
-  });
-});
 
 function setUpPlaylist(tracks) {
 
