@@ -47,7 +47,7 @@ function playSong (artist, title, uri, next) {
       onplayable: function() {
         state.playable = true;
         currentTrack.play();
-        $.post('../listen', {
+        $.post(extractDeviceIdFromURL() + '/listen', {
           track: uri,
         });
         console.log(currentTrack.connection+":\n  playable");
@@ -73,7 +73,7 @@ function playSong (artist, title, uri, next) {
 }
 
 $(function () {
-  $.get('json', function (tracks) {
+  $.get(extractDeviceIdFromURL() + '/party/json', function (tracks) {
     setUpPlaylist(tracks);
   });
 });

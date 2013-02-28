@@ -31,6 +31,11 @@ var express = require('express')
  */
 var hostUrl = 'http://entrance-tutorial.herokuapp.com';
 var db;
+var logoutTimeoutDict = {};
+io.set('log level', 1);
+
+// 2 hours
+var logoutTimeoutExpiration = 2 * 60 * 60 * 1000
 
 app.configure(function(){
   app.set('port', process.env.PORT || 3000);
@@ -135,7 +140,9 @@ app.post('/:deviceId/listen', function (req, res) {
 app.get('/:deviceId/party/json', function (req, res) {
   getCurrentStreamingSession(req.params.deviceId, function (error, currentStreamingSession) {
     if (currentStreamingSession && currentStreamingSession.tracks) {
-      res.json(currentStreamingSession.tracks);      
+      res.json(currentStreamingSession.tracks);  
+      console.log("updating with streaming users:", currentStreamingSession.streamingUsers);
+      updateClientUsers(req.params.deviceId, currentStreamingSession.streamingUsers);    
     } else {
       res.json([]);
     }
@@ -175,7 +182,18 @@ function handleTap (deviceId, pid, hollaback) {
     // or the user isn't in the db and they need to sync
     if (error) {
       console.log("We had an error with lifegraph:", error);
-      return hollaback({'error': "Physical ID has not been bound to an account. Go to http://connect.lifegraphlabs.com/, Connect with Entrance Tutorial, and tap again."});
+
+      console.log(error);
+
+      if (error == 404) {
+
+        return hollaback({'error': "Physical ID has not been bound to an account. Go to http://connect.lifegraphlabs.com/, Connect with Entrance Tutorial, and tap again."});
+
+      } else if (error == 406) {
+
+        return hollaback({'error': "No tokens found. User may have revoked access."});
+      }
+      
     } 
 
     // Grab those who are already in the room 
@@ -190,6 +208,8 @@ function handleTap (deviceId, pid, hollaback) {
           removeUserFromStreamingUsers(deviceId, user, function (err, newStreamingSession) {
 
             if (err) return console.log("Error the user couldn't be removed.");
+
+            clearLogoutTimeout(user);
 
             updateClientUsers(deviceId);
             // If there are no more users 
@@ -215,8 +235,7 @@ function handleTap (deviceId, pid, hollaback) {
 
                 // User left room, but people are still in room
                 return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
-              });
-              
+              });              
             }
           });
         } 
@@ -227,6 +246,8 @@ function handleTap (deviceId, pid, hollaback) {
           addUserToStreamingUsers(deviceId, user, function (err, streamingSession) {
 
             if (err) return console.log("User could not be added to room.");
+
+            setLogoutTimeout(deviceId, user);
 
             updateClientUsers(deviceId);
 
@@ -254,6 +275,36 @@ function handleTap (deviceId, pid, hollaback) {
       });
     });
   });
+}
+
+function setLogoutTimeout(deviceId, user) {
+
+  var logoutTimeout = setTimeout(function () {
+
+      // Remove the user from the streaming session
+    removeUserFromStreamingUsers(deviceId, user, function (err, newStreamingSession) {
+
+      // update the tracks for the current users
+      updateTracksForStreamingSession(newStreamingSession, function (err, tracks) {
+
+        // Let the client browsers know who's listening still
+        updateClientUsers(deviceId);
+
+        // Send the client browsers the new tracks
+        sendMessageToSessionSockets(deviceId, "tracks", tracks);
+      });
+    });
+
+  }, logoutTimeoutExpiration);
+
+  logoutTimeoutDict[user.id] = logoutTimeout; 
+}
+
+function clearLogoutTimeout (user) {
+  if (logoutTimeoutDict[user.id]) {
+    clearTimeout(logoutTimeoutDict[user.id]);
+    delete logoutTimeoutDict[user.id];
+  }
 }
 
 function updateTracksForStreamingSession(streamingSession, hollaback) {
@@ -362,8 +413,6 @@ function getFacebookBasicInfo(facebookUser, callback) {
 
  function sendMessageToSessionSockets(deviceId, mEvent, message) {
   if (!deviceId) return;
-
-  console.log("Sending message to browser at deviceId: " + deviceId);
 
   io.of("/" + deviceId).emit(mEvent, message);
   

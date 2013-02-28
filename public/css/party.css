@@ -10,10 +10,30 @@
 }
 #how-to {
 	font-size:20px;
-	color:#445ca3;;
+	color:#445ca3;
+	margin-right:20px;
 }
 #how-specific {
 	font-size:14px;
 	color:#ba4431;
 	margin-left:40px;
+}
+.logout {
+	color:#FF9900;
+}
+img {
+	border-radius: 15px;
+}
+
+img.instructions {
+	max-width:90%;
+}
+.num {
+	font-size:40px;
+	color:#445ca3;
+}
+#photo-flow {
+	padding:10px;
+	margin:10px;
+	border:solid 1px;
 }
