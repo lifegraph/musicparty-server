@@ -12,6 +12,7 @@ browser_socket.on('tracks', function (data) {
 });
 
 browser_socket.on('users', function (data) {
+  console.log("received users", data);
   if (data.action == "set") {
     setUserTable(data.users);
   }

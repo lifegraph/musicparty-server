@@ -98,10 +98,8 @@ app.get('/tracks/:id', function (req, res) {
     res.write('<head prefix="og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# music: http://ogp.me/ns/music#">');
     res.write('<meta property="fb:app_id"       content="' + key + '" />');
     res.write('<meta property="og:type"         content="music.song" />');
-    //res.write('<meta property="og:url"          content="Put your own URL to the object here" />');
     res.write('<meta property="og:title"        content="' + (json.track && json.track.name) + ' &mdash; ' + ((json.track.artists || [])[0] || {}).name + '" />');
     res.write('<meta property="og:image"        content="https://s-static.ak.fbcdn.net/images/devsite/attachment_blank.png" /> ');
-    //res.write('<meta property="music:album:url" content="Sample Album: URL" />');
     res.end('Done.');
   });
 })
@@ -142,7 +140,7 @@ app.get('/:deviceId/party/json', function (req, res) {
     if (currentStreamingSession && currentStreamingSession.tracks) {
       res.json(currentStreamingSession.tracks);  
       console.log("updating with streaming users:", currentStreamingSession.streamingUsers);
-      updateClientUsers(req.params.deviceId, currentStreamingSession.streamingUsers);    
+      updateClientUsers(req.params.deviceId);    
     } else {
       res.json([]);
     }
@@ -525,15 +523,6 @@ function shuffle(list) {
   }
 }
 
-function getUserFromStreamers(deviceId, userJSON, callback) {
-  getCurrentStreamers(deviceId, function (err, currentStreamers) {
-    if (!currentStreamers || err) {
-      callback(err, null);
-    } else {
-      callback(err, streamingUserForUserJSON(currentStreamers, userJSON));
-    }
-  });
-}
 
 function setCurrentStreamingSession(deviceId, streamingSession, callback) {
   streamingSession.deviceId = deviceId;
