@@ -4,7 +4,6 @@ var StreamingSessionSchema = mongoose.Schema({
   deviceId: String,
   streamingUsers: Array,
   tracks: Array,
-  openSockets: Array
 }, {
   collection: 'streaming_users_db'
 });

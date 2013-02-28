@@ -4,6 +4,7 @@ html
     title Entrance
     script(src='//code.jquery.com/jquery.min.js')
     link(rel='stylesheet', href='//netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/css/bootstrap-combined.min.css')
+    link(rel='stylesheet', href='/css/party.css')
     script(src='//netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js')
     script(src="http://toma.hk/api.js?v=1")
     script(src="/socket.io/socket.io.js")
@@ -11,9 +12,20 @@ html
 
 
   body
-    .container-fluid
-      h1 Entrance Party
+    div.container-fluid
+      div.row-fluid
+        div.span4
 
-      #musictarget
+          h1 Entrance Party
+          h3#room-title (#{room})
 
-      button.btn.btn-info#next Next Track
+          #musictarget
+
+          button.btn.btn-info#next Next Track
+
+        div.span4
+          h2 Mixing Music For Users:
+
+          table#usertarget.table.table-striped
+
+

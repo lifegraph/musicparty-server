@@ -1,5 +1,28 @@
+var browser_socket = io.connect(extractDeviceIdFromURL());
+var currentTrack;
 
-var browser_socket = io.connect(window.location);
+browser_socket.on('connect', function (data) {
+  console.log("We've got a connection, captain!: " + extractDeviceIdFromURL());
+});
+
+browser_socket.on('tracks', function (data) {
+  setUpPlaylist(data);
+});
+
+browser_socket.on('users', function (data) {
+  if (data.action == "set") {
+    setUserTable(data.users);
+  }
+});
+
+function extractDeviceIdFromURL() {
+  // Grab the different parts of the url
+  var comps = window.location.href.split("/");
+
+  // Return the number before party
+  return "/" + comps[comps.indexOf('party')-1];
+  
+}
 
 function playSong (artist, title, uri, next) {
   var state = {
@@ -7,41 +30,35 @@ function playSong (artist, title, uri, next) {
   };
 
   // http://toma.hk/api.html
-  var track = tomahkAPI.Track(title, artist, {
+  currentTrack = tomahkAPI.Track(title, artist, {
     width: 300,
     height: 300,
     disabledResolvers: ['SpotifyMetadata'],
     handlers: {
       onloaded: function() {
-        console.log(track.connection+":\n  api loaded");
+        console.log(currentTrack.connection+":\n  api loaded");
       },
       onended: function() {
         next();
-        console.log(track.connection+":\n  Song ended: "+track.artist+" - "+track.title);
+        console.log(currentTrack.connection+":\n  Song ended: "+currentTrack.artist+" - "+currentTrack.title);
       },
       onplayable: function() {
         state.playable = true;
-        track.play();
+        currentTrack.play();
         $.post('../listen', {
           track: uri,
         });
-        console.log(track.connection+":\n  playable");
+        console.log(currentTrack.connection+":\n  playable");
       },
       onresolved: function(resolver, result) {
-        console.log(track.connection+":\n  Track found: "+resolver+" - "+ result.track + " by "+result.artist);
+        console.log(currentTrack.connection+":\n  currentTrack found: "+resolver+" - "+ result.track + " by "+result.artist);
       },
       ontimeupdate: function(timeupdate) {
-        var currentTime = timeupdate.currentTime;
-        var duration = timeupdate.duration;
-        currentTime = parseInt(currentTime);
-        duration = parseInt(duration);
-
-        console.log(track.connection+":\n  Time update: "+currentTime + " "+duration);
       }
     }
   });
 
-  $('#musictarget').html('').append(track.render());
+  $('#musictarget').html('').append(currentTrack.render());
 
   setTimeout(function () {
     if (!state.playable) {
@@ -55,33 +72,57 @@ function playSong (artist, title, uri, next) {
 
 $(function () {
   $.get('json', function (tracks) {
+    setUpPlaylist(tracks);
+  });
+});
 
-    var state = null;
+function setUpPlaylist(tracks) {
 
-    function nextTrack () {
-      if (state) {
-        state.playable = true;
-      }
+  if (!tracks || !tracks.length) {
 
-      if (!tracks.length) {
-        return;
-      }
+    if (currentTrack) {
+      currentTrack.pause();
+      currentTrack = null;
+    } 
 
-      var track = tracks.shift();
-      state = playSong(track.artist, track.track, track.url, nextTrack);
+    $('#musictarget').html('');
+  }
+  var state = null;
+
+  function nextTrack () {
+    if (state) {
+      state.playable = true;
     }
 
-    nextTrack();
+    if (!tracks.length) {
+      return;
+    }
 
-    $('#next').on('click', nextTrack);
-  })
-})
+    var track = tracks.shift();
+    state = playSong(track.artist, track.track, track.url, nextTrack);
+  }
 
-// When we get a new image message
-browser_socket.on('socket', function (data) {
-  
-  // Change the source attribute of the image in 
-  // our client html to the new image url
-    console.log(data);
+  nextTrack();
 
-});
+  $('#next').on('click', nextTrack);
+} 
+
+
+function setUserTable(users) {
+
+  var table = $("#usertarget");
+  // Clear the table
+  table.html('');
+
+  $.each(users, function (index, user) {
+    console.log("User", user.link);
+    table.append(
+      $('<tr>').append(
+          $('<td>').append(
+            $('<a>').attr('href', user.link).attr('target', '_blank').text(user.first_name + " " + user.last_name)
+          )
+        )
+      )
+  });
+}
+

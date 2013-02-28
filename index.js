@@ -34,7 +34,7 @@ var db;
 
 app.configure(function(){
   app.set('port', process.env.PORT || 3000);
-  app.set('dburl', process.env.MONGOLAB_URI || 'mongodb://localhost:27017/entranceDBtemp');
+  app.set('dburl', process.env.MONGOLAB_URI || 'mongodb://localhost:27017/' + namespace);
   app.set('views', __dirname + '/views');
   app.set('view engine', 'jade');
   app.use(express.favicon());
@@ -71,11 +71,15 @@ app.get('/', function (req, res){
 app.post('/tap', function(req, res) {
   // Parse content.
   var deviceId = req.body.deviceUUID;
-  var pid = req.body.pID; // assume whole body is the deviceId
-  console.log("device with pid: %s and device id: %s", pid, deviceId);
-  handleTap(deviceId, pid, function (json) {
-    res.json(json);
-  });
+  var pId = req.body.pID; // assume whole body is the deviceId
+  console.log("device with pid: %s and device id: %s", pId, deviceId);
+  if (deviceId && pId) {
+    handleTap(deviceId, pId, function (json) {
+      res.json(json);
+    });
+  } else {
+    res.send({"error": "missing deviceUUID or pID"});
+  }
 });
 
 app.get('/tracks/:id', function (req, res) {
@@ -144,15 +148,22 @@ app.get("/test/:pID", function (req, res) {
   });
 });
 
-app.get('/:deviceId/party/', function (req, res) {
+app.get('/:deviceId/party', function (req, res) {
 
+  if (!io) {
+    console.log("We have no sockets.");
+    return res.send("No sockets set up in the server. Come back later.");
+  }
 
-  getCurrentStreamingSession(req.params.deviceId, function (err, streamingSession) {
-    var socket = io.of('/' + req.params.deviceId);
-    streamingSession.openSockets.push(socket);
-  })
-  res.render('party', {title: 'Party'});
+  // Grab the device ID
+  var deviceId = req.params.deviceId;
+
+  // Create a socket in the namespace.
+  var socket = io.of("/" + deviceId);
+
+  res.render('party', {room: deviceId});
 });
+
 
 /**
  * Logic
@@ -170,7 +181,6 @@ function handleTap (deviceId, pid, hollaback) {
     // Grab those who are already in the room 
     getCurrentStreamingSession(deviceId, function (error, currentStreamingSession) {
 
-
       indexOfStreamingUser(deviceId, user, function (err, index) {
         // If the user is in the room, delete them
         if (index != -1) {
@@ -179,15 +189,18 @@ function handleTap (deviceId, pid, hollaback) {
 
           removeUserFromStreamingUsers(deviceId, user, function (err, newStreamingSession) {
 
+            if (err) return console.log("Error the user couldn't be removed.");
+
+            updateClientUsers(deviceId);
             // If there are no more users 
             if (!newStreamingSession.streamingUsers.length) {
 
               console.log("No users remaining in room!");
 
               // Let the client know to stop playing
-              setTracksToStreamingSession(deviceId, [], function(err, streamingSession) {
+              updateTracksForStreamingSession(newStreamingSession, function(err, tracks) {
 
-                sendMessageToSessionSockets(streamingSession.openSockets, {}});
+                sendMessageToSessionSockets(deviceId, "tracks",{});
 
                 return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Empty session. Stopping Streaming After Song Ends.', 'cmd' : 0});
               });
@@ -196,9 +209,9 @@ function handleTap (deviceId, pid, hollaback) {
 
             } else {
 
-              updateTracksForStreamingSession(newStreamingSession.streamingUsers, function (err, tracks) {
+              updateTracksForStreamingSession(newStreamingSession, function (err, tracks) {
 
-                sendMessageToSessionSockets(streamingSession.openSockets, tracks);
+                sendMessageToSessionSockets(deviceId, "tracks", tracks);
 
                 // User left room, but people are still in room
                 return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
@@ -208,23 +221,28 @@ function handleTap (deviceId, pid, hollaback) {
           });
         } 
         else {
-          console.log("User NOT already in room!");
+          console.log("User NOT already in room! Adding user to room.");
 
-          // Add the user to the array
-          console.log("Adding user to array.");
 
           addUserToStreamingUsers(deviceId, user, function (err, streamingSession) {
 
+            if (err) return console.log("User could not be added to room.");
+
+            updateClientUsers(deviceId);
+
             updateTracksForStreamingSession(streamingSession, function (err, tracks) {
+
               if (err) {
                 console.log("Error updating tracks: " + err.message);
 
                 return hollaback({'error': err.message});
               }
               else {
-
                 if (tracks.length) {
-                  return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser', 'cmd' : '1'});
+
+                  sendMessageToSessionSockets(deviceId, "tracks", tracks);
+
+                  return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser if not already open', 'cmd' : '1'});
                 }
                 else {
                   return hollaback({'error': 'User Added To Streaming Session but they have  no tracks!'});
@@ -248,20 +266,23 @@ function updateTracksForStreamingSession(streamingSession, hollaback) {
       // if (err) return hollaback({'error': err.message});
       if (err) return hollaback(err, null);
 
-      setTracksToStreamingSession(streamingSession.deviceId, tracks, function (err, streamingSession) {
+      shuffle(tracks);
 
-        console.log("Added", streamingSession.tracks.length, "tracks to", deviceId, "room.");
+      setTracksToStreamingSession(streamingSession, tracks, function (err, streamingSession) {
+
+        console.log("Set", streamingSession.tracks.length, "tracks to", "room", streamingSession.deviceId + ".");
 
         if (err) {
 
           return hollaback(err, null);
         }
-          // return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser', 'cmd' : '1'});
           return hollaback(null, tracks);
       });
     });
   });  
 }
+
+
 
 /*
  * Poll Facebook to find the favorite artists
@@ -292,6 +313,30 @@ function getFacebookFavoriteArtists (facebookUser, callback) {
   });
 }
 
+function getFacebookBasicInfo(facebookUser, callback) {
+  var options = {
+      host: 'graph.facebook.com',
+      port: 443,
+      path: '/me/?access_token=' + facebookUser.tokens.oauthAccessToken
+    };
+  https.get(options, function(fbres) {
+      var output = '';
+      fbres.on('data', function (chunk) {
+          output += chunk;
+      });
+
+      fbres.on('end', function() {
+        var data = JSON.parse(output);
+
+        callback(null, data);
+      });
+
+      fbres.on('error', function (err) {
+        callback(err, null);
+      })
+  });
+}
+
 /*
  * Finds the artists that all the streaming users like
  */
@@ -305,19 +350,33 @@ function getFacebookFavoriteArtists (facebookUser, callback) {
       console.log("Error retrieving artist intersection: " + err);
     }
     else {
-      zippedArtists = _.flatten(_.zip.apply(_, artists));
+
+      artists.length ? zippedArtists = _.flatten(_.zip.apply(_, artists)) : zippedArtists = [];
+
+      zippedArtists.clean(undefined);
     }
+
     callback(err, zippedArtists);
   });
  }
 
- function sendMessageToSessionSockets(openSockets, message) {
-  if !(openSockets) return;
+ function sendMessageToSessionSockets(deviceId, mEvent, message) {
+  if (!deviceId) return;
 
-  for (var i = 0; i < openSockets.length; i++) {
-    openSockets[i].emit('tracks', message);
-  }
+  console.log("Sending message to browser at deviceId: " + deviceId);
+
+  io.of("/" + deviceId).emit(mEvent, message);
+  
  }
+
+ function updateClientUsers(deviceId) {
+  getCurrentStreamingSession(deviceId, function (err, streamingSession) {
+    async.map(streamingSession.streamingUsers, getFacebookBasicInfo, function (err, userData) {
+    if (err) return console.log("Error getting basic FB info");
+      sendMessageToSessionSockets(deviceId, "users", {"action" : "set", "users" : userData});
+    });
+  });
+}
 
 function getDistinctArray (arr, dohash) {
   var dups = {};
@@ -329,6 +388,16 @@ function getDistinctArray (arr, dohash) {
   });
 }
 
+Array.prototype.clean = function(deleteValue) {
+  for (var i = 0; i < this.length; i++) {
+    if (this[i] == deleteValue) {       
+      this.splice(i, 1);
+      i--;
+    }
+  }
+  return this;
+};
+
 function debugObject(prefix, obj) {
   console.log(prefix + " : " + JSON.stringify(obj, 2, undefined));
 }
@@ -338,17 +407,35 @@ function debugObject(prefix, obj) {
 function getTracksFromArtists (artists, callback) {
   if (!artists.length) {
     console.log("There are no artists.");
-    return callback([]);
+    return callback(null, []);
   }
-
   // Search tracks by each artist.
   shuffle(artists);
-  async.map(artists.slice(0, 20), function (artist, next) {
+
+  // console.log("artists: ", artists);
+
+  // For each artist in this list, do this function then get back together when it's done
+  async.map(artists.splice(0, 20), function (artist, next) {
+    // Ask spotify for tracks
     rem.json('http://ws.spotify.com/search/1/track.json').get({
       q: artist
     }, function (err, json) {
+
+      // If there is an error, return empty brackets?
+      if (err) {
+
+        console.log("Issue requesting tracks from Spotify for artist:",  artist);
+
+        return next(err, []);
+      }
+
+      if (!json || !json.tracks || !json.tracks.length) {
+        return next(null, []);
+      }
+
       console.log(artist);
-      next(null, json.tracks.filter(function (track) {
+
+      return next(null, json.tracks.filter(function (track) {
         return parseFloat(track.popularity) > 0.4;
       }).map(function (track) {
         return {
@@ -360,7 +447,7 @@ function getTracksFromArtists (artists, callback) {
       }));
     });
   }, function (err, tracks) {
-    if (!err) {
+    if (!err && tracks.length) {
       tracks = Array.prototype.concat.apply([], tracks);
       shuffle(tracks);
       tracks.sort(function (a, b) {
@@ -401,7 +488,6 @@ function getUserFromStreamers(deviceId, userJSON, callback) {
 
 function setCurrentStreamingSession(deviceId, streamingSession, callback) {
   streamingSession.deviceId = deviceId;
-  console.log(streamingSession);
   streamingSession.save(function (err) {
     return callback(err, streamingSession);
   });
@@ -490,30 +576,7 @@ function indexOfStreamingUser (deviceId, userInQuestion, callback) {
   });
 }
 
-/*
-* Create new socket connections
-* and handle teardowns
-*/
-io.sockets.on('connection', function (socket) {
 
-  // If there is a socket
-  // if (socket) {
-
-    // Set our global socket to it for later
-    console.log("Socket: " + socket);
-  // }
-
-  // When a socket disconnects
-  socket.on('disconnect', function () {
-
-    // Remove that socket from our array
-    
-  });
-});
-
-/**
- * Connect
- */
 // Start database and get things running
 console.log("connecting to database at " + app.get('dburl'));
 
