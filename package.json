@@ -14,8 +14,7 @@
     "lifegraph": "~0.0.1",
     "socket.io":"latest",
     "underscore":"latest",
-    "async":"latest",
-    
+    "async":"latest"
   },
   "engines": {
     "node": "0.8.x",
