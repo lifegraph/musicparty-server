@@ -1,11 +1,13 @@
 var browser_socket = io.connect(extractDeviceIdFromURL());
 var currentTrack;
+var nextTrackTimeout;
 
 browser_socket.on('connect', function (data) {
   console.log("We've got a connection, captain!: " + extractDeviceIdFromURL());
 });
 
 browser_socket.on('tracks', function (data) {
+  clearTimeout(nextTrackTimeout);
   setUpPlaylist(data);
 });
 
@@ -60,7 +62,7 @@ function playSong (artist, title, uri, next) {
 
   $('#musictarget').html('').append(currentTrack.render());
 
-  setTimeout(function () {
+  nextTrackTimeout = setTimeout(function () {
     if (!state.playable) {
       console.log('Track timed out, skipping.');
       next();
