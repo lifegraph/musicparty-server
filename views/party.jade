@@ -17,15 +17,48 @@ html
         div.span4
 
           h1 Entrance Party
-          h3#room-title (#{room})
+            h3#room-title (#{room})
+
+          div#tag-info
+            h3 Nobody has tagged in or music has run out. Tag in by following the instructions below!
 
           #musictarget
 
-          button.btn.btn-info#next Next Track
+          button.btn.btn-info#next.hidden Next Track
 
         div.span4
           h2 Mixing Music For Users:
 
           table#usertarget.table.table-striped
+            td
+              td Nobody Yet 
+
+    div.row-fluid
+      div.span#4#instructions
+        h2 What is Entrance?
+
+        p#how-to Entrance will sync your Facebook ID to your Charlie Card. You can come to this station, tag in, and have it instantly play your favorite music. If more people keep tagging in, it will play the the favorite music of everyone.
+
+      div.span12#instructions
+        h2 How To Use
+        ol
+          li
+            p#how-to First, you'll need to connect and sync your Charlie card to the entrance-tutorial by clicking
+              a(href='http://connect.lifegraphlabs.com')(target="_blank")  here!
+            ul
+              li
+                p#how-specific You'll need to click 'connect' next to Entrance-Tutorial.
+              li
+                p#how-specific Then, sign in with your Facebook credentials.
+              li
+                p#how-specific Finally, tap your Charlie Card against the reader and click to 'claim' your ID which links your Charlie Card ID with your Facebook ID.
+
+          li
+            p#how-to Once you've done that, 
+              b make sure you log out of Facebook so the next person can do it too.
+
+          li
+            p#how-to Then, just tap your Charlie Card against the reader once more to tag in and start playing your favorite music as well.
+
 
 

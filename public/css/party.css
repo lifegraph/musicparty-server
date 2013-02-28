@@ -1,0 +1,19 @@
+#room-title {
+	color:#445ca3;
+	opacity:.7;
+}
+.row-fluid {
+	margin-bottom:70px;
+}
+#instructions {
+	margin-left:20px;
+}
+#how-to {
+	font-size:20px;
+	color:#445ca3;;
+}
+#how-specific {
+	font-size:14px;
+	color:#ba4431;
+	margin-left:40px;
+}

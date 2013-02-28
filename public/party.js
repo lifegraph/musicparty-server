@@ -83,6 +83,7 @@ function setUpPlaylist(tracks) {
     if (currentTrack) {
       currentTrack.pause();
       currentTrack = null;
+      showHelpfulInfo(false);
     } 
 
     $('#musictarget').html('');
@@ -99,7 +100,13 @@ function setUpPlaylist(tracks) {
     }
 
     var track = tracks.shift();
-    state = playSong(track.artist, track.track, track.url, nextTrack);
+
+    if (track) {
+      showHelpfulInfo(true)
+      state = playSong(track.artist, track.track, track.url, nextTrack);
+    } else {
+      showHelpfulInfo(false)
+    }
   }
 
   nextTrack();
@@ -107,22 +114,39 @@ function setUpPlaylist(tracks) {
   $('#next').on('click', nextTrack);
 } 
 
+function showHelpfulInfo(taggedState) {
+  if (taggedState) {
+    $('#next').removeClass('hidden');
+    $('#tag-info').addClass('hidden');
+  } else {
+    $('#next').addClass('hidden');
+    $('#tag-info').removeClass('hidden');
+  }
+}
+
 
 function setUserTable(users) {
 
   var table = $("#usertarget");
   // Clear the table
   table.html('');
-
-  $.each(users, function (index, user) {
-    console.log("User", user.link);
-    table.append(
-      $('<tr>').append(
-          $('<td>').append(
-            $('<a>').attr('href', user.link).attr('target', '_blank').text(user.first_name + " " + user.last_name)
+  if (users.length) {
+    $.each(users, function (index, user) {
+      console.log("User", user.link);
+      table.append(
+        $('<tr>').append(
+            $('<td>').append(
+              $('<a>').attr('href', user.link).attr('target', '_blank').text(user.first_name + " " + user.last_name)
+            )
           )
         )
-      )
-  });
+    });
+  } else {
+    table.append(
+        $('<tr>').append(
+            $('<td>').text("Nobody yet. Tap your card!")
+          )
+        )
+  }
 }
 
