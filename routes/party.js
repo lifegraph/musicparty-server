@@ -14,7 +14,7 @@ var io;
 // App key and secret (these are git ignored)
 var key = process.env.FBKEY || require('../config.json').fbapp_key;
 var secret = process.env.FBSECRET || require('../config.json').fbapp_secret;
-var namespace = 'entrance-tutorial';
+var namespace = 'music-party';
 
 /**
  * Configure Lifegraph.
