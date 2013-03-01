@@ -1,4 +1,22 @@
-var mongojs = require('mongojs');
+var StreamingSession = require('../models/StreamingSession')
+  , mongoose = require('mongoose');
+
+var db;
+
+ function connectToDatabase(dbURL, callback) {
+  mongoose.connect(dbURL);
+  db = mongoose.connection;
+
+  db.on('error', function () {
+  	console.error.bind(console, 'connection error:');
+
+  	callback(null);
+  }); 
+
+  db.once('open', function () {
+  	callback(db);
+  });
+}
 
 function setCurrentStreamingSession(deviceId, streamingSession, callback) {
   streamingSession.deviceId = deviceId;
@@ -8,8 +26,11 @@ function setCurrentStreamingSession(deviceId, streamingSession, callback) {
 }
 
 function getCurrentStreamingSession(deviceId, callback) {
+  
+  if (!deviceId) {
+  	return (new Error("No deviceID supplied to retrieve current streaming session."), null);
+  }
 
-  assert(deviceId);
   StreamingSession.findOne({
     deviceId: deviceId
   }, function (err, streamingSession) {
@@ -23,14 +44,14 @@ function getCurrentStreamingSession(deviceId, callback) {
           else {
             return callback(null, streamingSession);
           }
-        })
+        });
       }
       // Else if blah blah blah 
       else {
         return callback(null, streamingSession);
       }
     }
-  })
+  });
 }
 
 function addUserToStreamingUsers(deviceId, user, callback) {
@@ -60,7 +81,7 @@ function removeTrackFromStreamingSession(deviceId, track, callback) {
   });
 }
 
-exports.removeUserFromStreamingUser = function (deviceId, userInQuestion, callback) {
+function removeUserFromStreamingUsers(deviceId, userInQuestion, callback) {
 
   getCurrentStreamingSession(deviceId, function (err, streamingSession) {
     for (var i = 0; i < streamingSession.streamingUsers.length; i++) {
@@ -74,9 +95,13 @@ exports.removeUserFromStreamingUser = function (deviceId, userInQuestion, callba
   });
 }
 
-exports.indexOfStreamingUser = function (deviceId, userInQuestion, callback) {
+function indexOfStreamingUser(deviceId, userInQuestion, callback) {
   console.log("Get Current Streaming Session");
-  assert(userInQuestion, "user must not be null");
+  
+  if (!deviceId || !userInQuestion) {
+  	return callback(new Error("DeviceID and/or userInQuestion cannot be null"));
+  }
+
   getCurrentStreamingSession(deviceId, function (err, streamingSession) {
 
     if (err) return callback(err, -1);
@@ -89,3 +114,12 @@ exports.indexOfStreamingUser = function (deviceId, userInQuestion, callback) {
     return callback(null, -1);
   });
 }
+
+module.exports.indexOfStreamingUser = indexOfStreamingUser;
+module.exports.removeUserFromStreamingUsers = removeUserFromStreamingUsers;
+module.exports.removeTrackFromStreamingSession = removeTrackFromStreamingSession;
+module.exports.setTracksToStreamingSession = setTracksToStreamingSession;
+module.exports.addUserToStreamingUsers = addUserToStreamingUsers;
+module.exports.getCurrentStreamingSession = getCurrentStreamingSession;
+module.exports.setCurrentStreamingSession = setCurrentStreamingSession;
+module.exports.connectToDatabase = connectToDatabase;

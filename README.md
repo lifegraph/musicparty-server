@@ -1,4 +1,4 @@
-entrance-tutorial-server
+Music Party Server
 ========================
 
-API server for the Entrance tutorial
+API server for the Music Party tutorial
