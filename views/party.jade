@@ -20,80 +20,95 @@ html
             h3#room-title (#{room})
 
           div#tag-info
-            h3 Nobody has tagged in or music has run out. Tag in by following the instructions below!
+            h3 Nobody has tagged in or music has run out.
+            // Tag in by following the instructions below!
 
           #musictarget
 
           button.btn.btn-info#next.hidden Next Track
 
         div.span4
-          h2 Mixing Music For Users:
+          h2 Users in this room:
 
           table#usertarget.table.table-striped
             td
               td Nobody Yet 
 
-    div.row-fluid(style="margin-bottom:-60px")
-      div.span12#instructions
-        h2 What is Music Party?
+          if profile
+            form(action="/join", method="post")
+              input(type="hidden", name="deviceUUID", value=room)
+              small
+                if !inroom
+                  | (Or you can 
+                  button.btn.btn-mini.btn-success Join from your browser
+                  | )
+                else
+                  | (When you're done, you can 
+                  button.btn.btn-mini.btn-danger leave this room
+                  | )
 
-        p#how-to Music Party will sync your Facebook ID to your Charlie Card. You can come to this station, tag in, and have it instantly play your favorite music. If more people keep tagging in, it will play the the favorite music of everyone.
+    //
+      div.row-fluid(style="margin-bottom:-60px")
+        div.span12#instructions
+          h2 What is Music Party?
 
-    div.row-fluid
-      div.span12#instructions
-        h2 How To Use
+          p#how-to Music Party will sync your Facebook ID to your Charlie Card. You can come to this station, tag in, and have it instantly play your favorite music. If more people keep tagging in, it will play the the favorite music of everyone.
 
-    div.row-fluid(style="margin-top:-60px")
+      div.row-fluid
+        div.span12#instructions
+          h2 How To Use
 
-      div.span4#photo-flow
-        p 
-          span.num 1. 
-          | First go to 
-          a(href='http://lifegraphconnect.com')(target="_blank") Lifegraph Connect 
-          | to sync your Charile Card and click 'Connect' next to Music Party.
-        img.instructions(src='/img/step1.png')
+      div.row-fluid(style="margin-top:-60px")
 
-      div.span4#photo-flow
-        p 
-          span.num 2. 
-          | Then, sign in with your Facebook credentials.
-        img.instructions(src='/img/step2.png')
+        div.span4#photo-flow
+          p 
+            span.num 1. 
+            | First go to 
+            a(href='http://lifegraphconnect.com')(target="_blank") Lifegraph Connect 
+            | to sync your Charile Card and click 'Connect' next to Music Party.
+          img.instructions(src='/img/step1.png')
 
-      div.span4#photo-flow
-        p 
-          span.num 3. 
-          | Then, click the 'Allow Access' button next to Music Party.
-        img.instructions(src='/img/step3.png')
+        div.span4#photo-flow
+          p 
+            span.num 2. 
+            | Then, sign in with your Facebook credentials.
+          img.instructions(src='/img/step2.png')
 
-    div.row-fluid
-      div.span4#photo-flow
-        p 
-          span.num 4. 
-          | Tap your Charlie Card against the reader and click to 'claim' your ID which links your Charlie Card ID with your Facebook ID.
-        img.instructions(src='/img/step4-7.png')
-    
+        div.span4#photo-flow
+          p 
+            span.num 3. 
+            | Then, click the 'Allow Access' button next to Music Party.
+          img.instructions(src='/img/step3.png')
 
-      div.span4#photo-flow
-        p 
-          span.num 5. 
-          | Back on the Lifegraph Connect website, click 'claim this device' which links your Charlie Card ID with your Facebook ID.
-        img.instructions(src='/img/step5.png')
+      div.row-fluid
+        div.span4#photo-flow
+          p 
+            span.num 4. 
+            | Tap your Charlie Card against the reader and click to 'claim' your ID which links your Charlie Card ID with your Facebook ID.
+          img.instructions(src='/img/step4-7.png')
+      
 
-      div.span4#photo-flow
-        p 
-          span.num 6. 
-          | Log out of Lifegraph Connect so more people can sync after you!.
-        img.instructions(src='/img/step6.png')
-    div.row-fluid
-    
-      div.span4#photo-flow
-        p 
-          span.num 7. 
-          | Then, just tap your Charlie Card against the reader once more to tag in and start playing your favorite music as well.
-        img.instructions(src='/img/step4-7.png')
+        div.span4#photo-flow
+          p 
+            span.num 5. 
+            | Back on the Lifegraph Connect website, click 'claim this device' which links your Charlie Card ID with your Facebook ID.
+          img.instructions(src='/img/step5.png')
 
-    div.row-fluid#contact
-      p This is a Paul Booth (paul.booth@students.olin.edu) and Jon McKay (jonathan.mckay@students.olin.edu) production. Contact us with questions or concerns.
+        div.span4#photo-flow
+          p 
+            span.num 6. 
+            | Log out of Lifegraph Connect so more people can sync after you!.
+          img.instructions(src='/img/step6.png')
+      div.row-fluid
+      
+        div.span4#photo-flow
+          p 
+            span.num 7. 
+            | Then, just tap your Charlie Card against the reader once more to tag in and start playing your favorite music as well.
+          img.instructions(src='/img/step4-7.png')
+
+      div.row-fluid#contact
+        p This is a Paul Booth (paul.booth@students.olin.edu) and Jon McKay (jonathan.mckay@students.olin.edu) production. Contact us with questions or concerns.
 
 
 

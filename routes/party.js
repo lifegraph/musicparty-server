@@ -1,5 +1,4 @@
-var express = require('express')
-  , lifegraph = require("lifegraph")
+var lifegraph = require("lifegraph")
   , rem = require('rem')
   , async = require('async')
   , _ = require('underscore')
@@ -14,7 +13,7 @@ var io;
 // App key and secret (these are git ignored)
 var key = process.env.FBKEY || require('../config.json').fbapp_key;
 var secret = process.env.FBSECRET || require('../config.json').fbapp_secret;
-var namespace = 'music-party';
+var namespace = 'musicparty';
 
 /**
  * Configure Lifegraph.
@@ -66,83 +65,98 @@ partyTapLogic = function (deviceId, pid, hollaback) {
       
     } 
 
-    // Grab those who are already in the room 
-    streamingDB.getCurrentStreamingSession(deviceId, function (error, currentStreamingSession) {
+    partyJoinLogic(deviceId, user, hollaback);
+  });
+}
 
-      streamingDB.indexOfStreamingUser(deviceId, user, function (err, index) {
-        // If the user is in the room, delete them
-        if (index != -1) {
-          console.log("User already in room... deleting user from room.")
-          // Update the current streaming users
+joinHandler = function (req, res) {
+  var deviceId = req.body.deviceUUID;
+  if (deviceId && req.session.profile) {
+    var user = oauth.session(req);
+    user.saveState(function (tokens) {
+      console.log(tokens);
+      partyJoinLogic(deviceId, {
+        id: req.session.profile.id,
+        tokens: tokens
+      }, function (json) {
+        res.redirect('/' + deviceId + '/party/');
+      });
+    });
+  } else {
+    res.send({"error": "missing deviceUUID or not logged in"});
+  }
+}
 
-          streamingDB.removeUserFromStreamingUsers(deviceId, user, function (err, newStreamingSession) {
+function partyJoinLogic (deviceId, user, hollaback) {
 
-            if (err) return console.log("Error the user couldn't be removed.");
+  // Grab those who are already in the room 
+  streamingDB.getCurrentStreamingSession(deviceId, function (error, currentStreamingSession) {
 
-            clearLogoutTimeout(user);
+    streamingDB.indexOfStreamingUser(deviceId, user, function (err, index) {
+      // If the user is in the room, delete them
+      if (index != -1) {
+        console.log("User already in room... deleting user from room.")
+        // Update the current streaming users
 
-            updateClientUsers(deviceId);
-            // If there are no more users 
-            if (!newStreamingSession.streamingUsers.length) {
+        streamingDB.removeUserFromStreamingUsers(deviceId, user, function (err, newStreamingSession) {
 
-              console.log("No users remaining in room!");
+          if (err) return console.log("Error the user couldn't be removed.");
 
-              // Let the client know to stop playing
-              updateTracksForStreamingSession(newStreamingSession, function(err, tracks) {
+          clearLogoutTimeout(user);
 
-                sendMessageToSessionSockets(deviceId, "tracks",{});
+          updateClientUsers(deviceId);
+          // If there are no more users 
+          if (!newStreamingSession.streamingUsers.length) {
+            console.log("No users remaining in room!");
 
-                return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Empty session. Stopping Streaming After Song Ends.', 'cmd' : 0});
-              });
+            // Let the client know to stop playing
+            updateTracksForStreamingSession(newStreamingSession, function (err, tracks) {
+              sendMessageToSessionSockets(deviceId, "tracks",{});
+              hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Empty session. Stopping Streaming After Song Ends.', 'cmd' : 0});
+            });
+          } else {
+            updateTracksForStreamingSession(newStreamingSession, function (err, tracks) {
+              sendMessageToSessionSockets(deviceId, "tracks", tracks);
 
-              
+              // User left room, but people are still in room
+              hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
+            });              
+          }
+        });
+      } 
+      else {
+        console.log("User NOT already in room! Adding user to room.");
 
-            } else {
 
-              updateTracksForStreamingSession(newStreamingSession, function (err, tracks) {
+        streamingDB.addUserToStreamingUsers(deviceId, user, function (err, streamingSession) {
+
+          if (err) return console.log("User could not be added to room.");
+
+          setLogoutTimeout(deviceId, user);
+
+          updateClientUsers(deviceId);
+
+          updateTracksForStreamingSession(streamingSession, function (err, tracks) {
+
+            if (err) {
+              console.log("Error updating tracks: " + err.message);
+
+              return hollaback({'error': err.message});
+            }
+            else {
+              if (tracks.length) {
 
                 sendMessageToSessionSockets(deviceId, "tracks", tracks);
 
-                // User left room, but people are still in room
-                return hollaback({'action' : 'User Tagged Out of Room', 'message' : 'Reforming track list on server for remeaning streaming users.', 'cmd' : 0});
-              });              
-            }
-          });
-        } 
-        else {
-          console.log("User NOT already in room! Adding user to room.");
-
-
-          streamingDB.addUserToStreamingUsers(deviceId, user, function (err, streamingSession) {
-
-            if (err) return console.log("User could not be added to room.");
-
-            setLogoutTimeout(deviceId, user);
-
-            updateClientUsers(deviceId);
-
-            updateTracksForStreamingSession(streamingSession, function (err, tracks) {
-
-              if (err) {
-                console.log("Error updating tracks: " + err.message);
-
-                return hollaback({'error': err.message});
+                return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser if not already open', 'cmd' : '1'});
               }
               else {
-                if (tracks.length) {
-
-                  sendMessageToSessionSockets(deviceId, "tracks", tracks);
-
-                  return hollaback({'action': 'User Added To Streaming Session', 'message': 'Opening Browser if not already open', 'cmd' : '1'});
-                }
-                else {
-                  return hollaback({'error': 'User Added To Streaming Session but they have  no tracks!'});
-                }
+                return hollaback({'error': 'User Added To Streaming Session but they have  no tracks!'});
               }
-            })
-          });
-        }
-      });
+            }
+          })
+        });
+      }
     });
   });
 }
@@ -187,7 +201,19 @@ partyEntrance = function (req, res) {
   // Create a socket in the namespace.
   var socket = io.of("/" + deviceId);
 
-  res.render('party', {room: deviceId});
+
+  streamingDB.getCurrentStreamingSession(req.params.deviceId, function (error, currentStreamingSession) {
+    console.log('here', currentStreamingSession.streamingUsers[0], req.session.profile);
+    var inroom = req.session.profile && currentStreamingSession.streamingUsers.some(function (u) {
+      return String(u.id) == String(req.session.profile.id)
+    });
+
+    res.render('party', {
+      profile: req.session.profile,
+      inroom: inroom,
+      room: deviceId
+    });
+  });
 }
 
 
@@ -223,8 +249,8 @@ recordListenOnFacebook = function(req, res) {
     sess.streamingUsers.forEach(function (tokens) {
       var user = oauth.restore(tokens.tokens);
       console.log('User:', tokens.id);
-      user('me/music-party:enter_to').post({
-        song: 'http://music-party.herokuapp.com/tracks/' + req.body.track
+      user('me/music.listens').post({
+        song: 'http://musicparty.herokuapp.com/tracks/' + req.body.track
       }, function (err, json) {
         console.log('Posted song to Open Graph', err, json);
       })
@@ -425,6 +451,7 @@ zipFavoriteArtists = function(streamingUsers, callback) {
 
 module.exports.setSocketServer = setSocketServer;
 module.exports.tapHandler = tapHandler;
+module.exports.joinHandler = joinHandler;
 module.exports.partyEntrance = partyEntrance;
 module.exports.partyInfo = partyInfo
 module.exports.trackLookup = trackLookup;

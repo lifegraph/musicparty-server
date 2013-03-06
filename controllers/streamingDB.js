@@ -3,7 +3,7 @@ var StreamingSession = require('../models/StreamingSession')
 
 var db;
 
- function connectToDatabase(dbURL, callback) {
+function connectToDatabase(dbURL, callback) {
   mongoose.connect(dbURL);
   db = mongoose.connection;
 
@@ -115,11 +115,13 @@ function indexOfStreamingUser(deviceId, userInQuestion, callback) {
   });
 }
 
-module.exports.indexOfStreamingUser = indexOfStreamingUser;
-module.exports.removeUserFromStreamingUsers = removeUserFromStreamingUsers;
-module.exports.removeTrackFromStreamingSession = removeTrackFromStreamingSession;
-module.exports.setTracksToStreamingSession = setTracksToStreamingSession;
-module.exports.addUserToStreamingUsers = addUserToStreamingUsers;
-module.exports.getCurrentStreamingSession = getCurrentStreamingSession;
-module.exports.setCurrentStreamingSession = setCurrentStreamingSession;
-module.exports.connectToDatabase = connectToDatabase;
+// External API.
+
+exports.indexOfStreamingUser = indexOfStreamingUser;
+exports.removeUserFromStreamingUsers = removeUserFromStreamingUsers;
+exports.removeTrackFromStreamingSession = removeTrackFromStreamingSession;
+exports.setTracksToStreamingSession = setTracksToStreamingSession;
+exports.addUserToStreamingUsers = addUserToStreamingUsers;
+exports.getCurrentStreamingSession = getCurrentStreamingSession;
+exports.setCurrentStreamingSession = setCurrentStreamingSession;
+exports.connectToDatabase = connectToDatabase;
