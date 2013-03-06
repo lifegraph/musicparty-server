@@ -332,9 +332,9 @@ getTracksFromArtists = function (artists, callback) {
       // If there is an error, return empty brackets?
       if (err) {
 
-        console.log("Issue requesting tracks from Spotify for artist:",  artist);
+        console.log("Issue requesting tracks from Spotify for artist:",  artist, err);
 
-        return next(err, []);
+        return next(null, []);
       }
 
       if (!json || !json.tracks || !json.tracks.length) {
